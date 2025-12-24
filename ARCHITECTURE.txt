@@ -1,0 +1,203 @@
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    BILLIARD MANAGEMENT SYSTEM                           │
+│                         Architecture Overview                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           FRONTEND (React + Vite)                       │
+│                      http://localhost:5173                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │
+│  │  Dashboard   │  │ MatchLogger  │  │  Leaderboard │                │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                │
+│         │                 │                 │                          │
+│         └─────────────────┴─────────────────┘                          │
+│                           │                                             │
+│                    ┌──────▼───────┐                                    │
+│                    │ GameContext  │                                    │
+│                    │  (API Calls) │                                    │
+│                    └──────┬───────┘                                    │
+│                           │                                             │
+│                    ┌──────▼───────┐                                    │
+│                    │  API Helper  │                                    │
+│                    │ (api-helper) │                                    │
+│                    └──────┬───────┘                                    │
+└───────────────────────────┼─────────────────────────────────────────────┘
+                            │
+                            │ HTTP/JSON (CORS Enabled)
+                            │
+┌───────────────────────────▼─────────────────────────────────────────────┐
+│                    BACKEND (Bun + ElysiaJS)                             │
+│                      http://localhost:3000                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐ │
+│  │                         API Routes                                │ │
+│  ├──────────────────────────────────────────────────────────────────┤ │
+│  │                                                                   │ │
+│  │  /api/players          /api/matches        /api/stats            │ │
+│  │  ├─ GET /              ├─ GET /             ├─ GET /             │ │
+│  │  ├─ POST /             ├─ POST /            ├─ GET /expenses     │ │
+│  │  ├─ GET /:id           ├─ GET /recent       ├─ GET /leaderboard  │ │
+│  │  └─ DELETE /:id        ├─ GET /:id          └─ GET /player/:id   │ │
+│  │                        ├─ DELETE /:id                             │ │
+│  │                        └─ GET /payer/next                         │ │
+│  │                                                                   │ │
+│  └───────────────────────────┬─────────────────────────────────────┘ │
+│                              │                                         │
+│  ┌───────────────────────────▼─────────────────────────────────────┐ │
+│  │                      Service Layer                               │ │
+│  ├──────────────────────────────────────────────────────────────────┤ │
+│  │                                                                   │ │
+│  │  ┌──────────────────┐           ┌──────────────────┐            │ │
+│  │  │ PlayerService    │           │  MatchService    │            │ │
+│  │  ├──────────────────┤           ├──────────────────┤            │ │
+│  │  │ • getAllPlayers  │           │ • createMatch    │            │ │
+│  │  │ • createPlayer   │           │ • getMatches     │            │ │
+│  │  │ • deletePlayer   │           │ • deleteMatch    │            │ │
+│  │  │ • getStats       │           │ • getNextPayer   │            │ │
+│  │  │ • initDefaults   │           │ • rotatePayer    │            │ │
+│  │  └──────────────────┘           │ • getExpenses    │            │ │
+│  │                                 └──────────────────┘            │ │
+│  │                                                                   │ │
+│  └───────────────────────────────┬─────────────────────────────────┘ │
+│                                  │                                     │
+│  ┌───────────────────────────────▼─────────────────────────────────┐ │
+│  │                    Database Connection                           │ │
+│  │                       (postgres.js)                              │ │
+│  └───────────────────────────────┬─────────────────────────────────┘ │
+└───────────────────────────────────┼─────────────────────────────────────┘
+                                    │
+                                    │ SQL Queries
+                                    │
+┌───────────────────────────────────▼─────────────────────────────────────┐
+│                        DATABASE (PostgreSQL)                            │
+│                      postgres://localhost:5432/billiard                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐      │
+│  │     players     │  │     matches     │  │ payer_rotation   │      │
+│  ├─────────────────┤  ├─────────────────┤  ├──────────────────┤      │
+│  │ • id (PK)       │  │ • id (PK, UUID) │  │ • id (PK)        │      │
+│  │ • name (unique) │  │ • winner_id (FK)│  │ • current_payer  │      │
+│  │ • created_at    │  │ • loser_id (FK) │  │ • updated_at     │      │
+│  │ • updated_at    │  │ • payer_id (FK) │  └──────────────────┘      │
+│  └─────────────────┘  │ • cost          │                             │
+│                       │ • date          │                             │
+│                       │ • created_at    │                             │
+│                       └─────────────────┘                             │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐ │
+│  │                      player_stats (VIEW)                          │ │
+│  ├──────────────────────────────────────────────────────────────────┤ │
+│  │  Aggregates:                                                      │ │
+│  │  • wins           (COUNT from matches where winner_id)            │ │
+│  │  • losses         (COUNT from matches where loser_id)             │ │
+│  │  • total_spent    (SUM cost where payer_id)                       │ │
+│  │  • matches_played (wins + losses)                                 │ │
+│  │  • win_rate       (wins / matches_played * 100)                   │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          DATA FLOW EXAMPLE                              │
+│                    Creating a New Match                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  1. User fills MatchLogger form (winner, loser, cost)
+           │
+           ▼
+  2. Component calls: billiardAPI.createMatch(winner, loser, cost)
+           │
+           ▼
+  3. API Helper sends POST /api/matches with JSON body
+           │
+           ▼
+  4. ElysiaJS routes to matchesRouter
+           │
+           ▼
+  5. MatchService.createMatch():
+      • Validates players exist
+      • Gets current payer from rotation table
+      • Inserts match into database
+      • Rotates payer to next in line
+      • Returns match with player names
+           │
+           ▼
+  6. Response sent back to frontend: { success: true, data: match }
+           │
+           ▼
+  7. GameContext refreshes all data
+           │
+           ▼
+  8. Dashboard components re-render with new data
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PAYER ROTATION LOGIC                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Initial State: players = [Minh, Toàn, Hải]
+                 current_payer = Minh (index 0)
+
+  Match 1:  Payer = Minh   → Next = Toàn (index 1)
+  Match 2:  Payer = Toàn   → Next = Hải (index 2)
+  Match 3:  Payer = Hải    → Next = Minh (index 0)  [wraps around]
+  Match 4:  Payer = Minh   → Next = Toàn (index 1)
+  ...and so on (round-robin)
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         TECHNOLOGY STACK                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Frontend              Backend              Database
+  ┌────────────┐       ┌────────────┐       ┌────────────┐
+  │   React    │       │    Bun     │       │ PostgreSQL │
+  │   Vite     │◄─────►│  ElysiaJS  │◄─────►│   v13+     │
+  │TypeScript  │ CORS  │ TypeScript │  SQL  │            │
+  │ Framer     │       │postgres.js │       │            │
+  └────────────┘       └────────────┘       └────────────┘
+  Port: 5173           Port: 3000           Port: 5432
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          API RESPONSE FORMAT                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Success Response:
+  {
+    "success": true,
+    "data": {
+      // Your requested data here
+    }
+  }
+
+  Error Response:
+  {
+    "success": false,
+    "error": "Detailed error message"
+  }
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      KEY FEATURES IMPLEMENTED                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ✓ Player CRUD operations
+  ✓ Match tracking with full history
+  ✓ Automatic payer rotation (round-robin)
+  ✓ Real-time statistics calculation
+  ✓ Flexible expense tracking (week/month/year/all)
+  ✓ Leaderboard with win rates
+  ✓ Type-safe API with validation
+  ✓ Database constraints for integrity
+  ✓ CORS enabled for frontend
+  ✓ Error handling throughout
+  ✓ Auto-initialization of default data
+  ✓ Indexed queries for performance
+```
