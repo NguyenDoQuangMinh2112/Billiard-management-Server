@@ -1,3 +1,21 @@
+# 🚨 Troubleshooting: "bun: not found" Error
+
+If you see the error `sh: 1: bun: not found` or `Application exited with code 127`, it means **Koyeb is NOT using your Dockerfile**.
+
+It is trying to run your project as a standard Node.js app, which doesn't have Bun installed.
+
+### 🛠️ How to Fix
+
+1.  Go to your **Service Settings** in Koyeb.
+2.  Click on the **"Settings"** tab.
+3.  Find the **"Builder"** or **"Build"** section.
+4.  **Change "Builder" from "Node.js" (or Standard) to "Docker"**.
+    *   Ensure the "Docker Image" source is set to build from your repository.
+    *   Ensure the "Dockerfile location" is set to `Dockerfile`.
+5.  **Save and Redeploy**.
+
+---
+
 # 🚀 Deploying to Koyeb
 
 Follow these steps to deploy your Billiard Management Server to Koyeb using Docker or GitHub.
