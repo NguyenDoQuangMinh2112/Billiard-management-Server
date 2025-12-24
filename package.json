@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "bun run --watch index.ts",
-    "start": "/usr/local/bin/bun run index.ts",
+    "start": "bun run index.ts",
     "db:init": "psql -U postgres -d billiard -f src/schema.sql"
   },
   "devDependencies": {
