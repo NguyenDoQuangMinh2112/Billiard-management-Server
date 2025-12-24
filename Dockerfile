@@ -11,10 +11,10 @@ COPY . .
 
 # Set environment variables
 ENV NODE_ENV=production
+ENV PATH="/usr/local/bin:${PATH}"
 
 # Expose the port
 EXPOSE 3000
 
-# Run the app using CMD (more compatible with Koyeb)
-# We use the full path just to be absolutely safe
-CMD ["/usr/local/bin/bun", "run", "index.ts"]
+# Use ENTRYPOINT with absolute path for maximum reliability
+ENTRYPOINT ["/usr/local/bin/bun", "run", "index.ts"]
