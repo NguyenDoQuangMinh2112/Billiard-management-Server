@@ -61,7 +61,24 @@ const app = new Elysia()
 
   // API routes
   .group("/api", (app) =>
-    app.use(playersRouter).use(matchesRouter).use(statsRouter)
+    app
+      .use(playersRouter)
+      .use(matchesRouter)
+      .use(statsRouter)
+      // Temporary migration endpoint
+      .post("/migrate", async () => {
+        try {
+          await Migration.runMigrations();
+          return { success: true, message: "Migrations run successfully" };
+        } catch (error) {
+          logger.error("Migration failed manually", { error });
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Migration failed",
+          };
+        }
+      })
   )
 
   // Initialize database and run migrations on server start
