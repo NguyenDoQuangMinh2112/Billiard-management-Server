@@ -4,7 +4,7 @@ import { playersRouter } from "./src/routes/players";
 import { matchesRouter } from "./src/routes/matches";
 import { statsRouter } from "./src/routes/stats";
 import { playerService } from "./src/services/playerService";
-import { Migration } from "./src/models";
+import { Migration, PlayerModel } from "./src/models";
 import { ErrorHandler, AppError } from "./src/errors";
 import { logger } from "./src/utils/logger";
 import config from "./src/config";
@@ -46,7 +46,13 @@ const app = new Elysia()
     const dbHealthy = await sql`SELECT 1 as health`
       .then(() => true)
       .catch(() => false);
-    const status = dbHealthy ? "healthy" : "unhealthy";
+    
+    // Check if players table exists
+    const playersTableExists = dbHealthy 
+      ? await PlayerModel.tableExists().catch(() => false)
+      : false;
+
+    const status = (dbHealthy && playersTableExists) ? "healthy" : "unhealthy";
 
     return {
       success: true,
@@ -54,6 +60,9 @@ const app = new Elysia()
       timestamp: new Date().toISOString(),
       services: {
         database: dbHealthy ? "up" : "down",
+        tables: {
+          players: playersTableExists ? "exists" : "missing"
+        },
         server: "up",
       },
     };
