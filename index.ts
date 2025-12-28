@@ -162,7 +162,10 @@ const app = new Elysia()
     // Only close when server is actually stopping
   })
 
-  .listen(config.server.port);
+  .listen({
+    port: config.server.port,
+    hostname: config.server.host,
+  });
 
 // Server startup success message
 logger.info(
