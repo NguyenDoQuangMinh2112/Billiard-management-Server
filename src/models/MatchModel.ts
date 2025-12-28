@@ -33,7 +33,7 @@ export class MatchModel extends BaseModel {
             CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)
         `;
 
-    console.log("✅ Matches table created successfully");
+    // console.log("✅ Matches table created successfully");
   }
 
   static async findAll(): Promise<MatchWithNames[]> {

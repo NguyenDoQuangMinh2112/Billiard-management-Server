@@ -20,16 +20,16 @@ const app = new Elysia()
     })
   )
 
-  // Request logging
-  .onRequest(({ request }) => {
-    const start = Date.now();
-    logger.info("Incoming request", {
-      method: request.method,
-      url: request.url,
-      timestamp: new Date().toISOString(),
-    });
-    (request as any).startTime = start;
-  })
+  // Request logging (Disabled by user request)
+  // .onRequest(({ request }) => {
+  //   const start = Date.now();
+  //   logger.info("Incoming request", {
+  //     method: request.method,
+  //     url: request.url,
+  //     timestamp: new Date().toISOString(),
+  //   });
+  //   (request as any).startTime = start;
+  // })
 
   // Health check endpoint
   .get("/", () => ({
@@ -93,25 +93,25 @@ const app = new Elysia()
   // Initialize database and run migrations on server start
   .onStart(async () => {
     const mode = config.server.isProduction ? "PRODUCTION" : "DEVELOPMENT";
-    logger.info(`Starting Billiard Management Server v2.0.0 in ${mode} mode`, {
-      port: config.server.port,
-      host: config.server.host,
-      logLevel: config.server.logLevel,
-    });
+    // logger.info(`Starting Billiard Management Server v2.0.0 in ${mode} mode`, {
+    //   port: config.server.port,
+    //   host: config.server.host,
+    //   logLevel: config.server.logLevel,
+    // });
 
     try {
       // Test database connection
       await sql`SELECT 1`;
-      logger.info("Database connection established");
+      // logger.info("Database connection established");
 
       // Run database migrations
       await Migration.runMigrations();
-      logger.info("Database migrations completed");
+      // logger.info("Database migrations completed");
 
       // Initialize default players in development
       if (config.features.autoInitPlayers) {
         await playerService.initializeDefaultPlayers();
-        logger.info("Default players initialized");
+        // logger.info("Default players initialized");
       }
     } catch (error) {
       logger.error("Database initialization failed", { error });
@@ -178,18 +178,7 @@ const app = new Elysia()
 
 // Server startup success message
 logger.info(
-  `Server is running at http://${config.server.host}:${config.server.port}`,
-  {
-    endpoints: {
-      health: "/health",
-      api: "/api",
-      players: "/api/players",
-      matches: "/api/matches",
-      stats: "/api/stats",
-    },
-    database: "PostgreSQL",
-    features: config.features,
-  }
+  `Server is running at http://${config.server.host}:${config.server.port}`
 );
 
 // Handle process termination

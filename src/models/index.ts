@@ -4,7 +4,7 @@ import { PayerRotationModel } from "./PayerRotationModel";
 
 export class Migration {
   static async runMigrations(): Promise<void> {
-    console.log("🚀 Starting database migrations...");
+    // console.log("🚀 Starting database migrations...");
 
     try {
       // Create tables in the correct order (respecting foreign key dependencies)
@@ -16,10 +16,10 @@ export class Migration {
       const players = await PlayerModel.findAll();
       if (players.length > 0) {
         await PayerRotationModel.initializeWithFirstPlayer();
-        console.log("✅ Payer rotation initialized");
+        // console.log("✅ Payer rotation initialized");
       }
 
-      console.log("✅ All migrations completed successfully!");
+      // console.log("✅ All migrations completed successfully!");
     } catch (error) {
       console.error("❌ Migration failed:", error);
       throw error;

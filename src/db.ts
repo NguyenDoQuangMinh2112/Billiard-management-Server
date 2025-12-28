@@ -17,7 +17,7 @@ class Database implements DatabaseClient {
       idle_timeout: config.database.idleTimeoutMs,
       connect_timeout: 10,
       prepare: false,
-      onnotice: config.server.isProduction ? undefined : console.log,
+      onnotice: undefined, // Disable notices (e.g. relation already exists)
       debug: config.server.logLevel === "debug",
     });
   }

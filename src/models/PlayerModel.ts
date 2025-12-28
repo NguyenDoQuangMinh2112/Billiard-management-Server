@@ -35,7 +35,7 @@ export class PlayerModel extends BaseModel {
                 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
             `;
 
-      logger.info("Players table created successfully");
+      // logger.info("Players table created successfully");
     } catch (error) {
       this.handleDatabaseError(error, "create table");
     }

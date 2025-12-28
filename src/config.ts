@@ -55,8 +55,8 @@ if (process.env.NODE_ENV !== "test") {
 
 export const config: AppConfig = {
   server: {
-    port: parsePort(process.env.PORT, 5000),
-    host: process.env.HOST || "0.0.0.0",
+    port: parsePort(process.env.PORT, 8080),
+    host: process.env.HOST || "localhost",
     corsOrigin: parseCorsOrigin(process.env.CORS_ORIGIN),
     isProduction: process.env.NODE_ENV === "production",
     logLevel:
