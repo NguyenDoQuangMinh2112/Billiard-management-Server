@@ -8,7 +8,10 @@
   "scripts": {
     "dev": "bun run --watch index.ts",
     "start": "bun run index.ts",
-    "db:init": "psql -U postgres -d billiard -f src/schema.sql"
+    "db:init": "psql -U postgres -d billiard -f src/schema.sql",
+    "db:migrate": "bun run migrate.ts migrate",
+    "db:reset": "bun run migrate.ts reset",
+    "db:drop": "bun run migrate.ts drop"
   },
   "devDependencies": {
     "@types/bun": "latest"
