@@ -1,5 +1,6 @@
 import { MatchModel } from "../models/MatchModel";
 import { PayerRotationModel } from "../models/PayerRotationModel";
+import { MatchStatsModel } from "../models/MatchStatsModel";
 import sql from "../db";
 import type {
   Match,
@@ -83,6 +84,37 @@ export class MatchService {
 
       // Rotate to next payer after successful match creation
       await PayerRotationModel.rotateToNextPayer();
+
+      // Save detailed stats if available
+      if (data.details && data.details.length > 0) {
+        for (const detail of data.details) {
+          try {
+             const player = await playerService.getPlayerByName(detail.name);
+             if (player) {
+                await MatchStatsModel.addStats(match.id, player.id, detail.wins, detail.losses);
+             }
+          } catch (e) {
+             console.error("Error saving stats for player:", detail.name, e);
+          }
+        }
+      } else if (data.participants && data.participants.length > 0) {
+        // Fallback: If no details but participants exist, create 0-0 or infer from winner/loser?
+        // Winner gets 1-0, Loser gets 0-1, others 0-0.
+        // This is handled by "backfill" logic? No.
+        // Let's explicitly save for NEW matches to be safe.
+        for (const pName of data.participants) {
+            try {
+                const player = await playerService.getPlayerByName(pName);
+                if (player) {
+                    const isWinner = pName === winnerName;
+                    const isLoser = pName === loserName;
+                    const wins = isWinner ? 1 : 0;
+                    const losses = isLoser ? 1 : 0;
+                     await MatchStatsModel.addStats(match.id, player.id, wins, losses);
+                }
+            } catch (e) {}
+        }
+      }
 
       // Get the match with names for response
       const matchWithNames = await this.getMatchById(match.id);

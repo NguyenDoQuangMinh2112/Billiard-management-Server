@@ -33,9 +33,9 @@ export interface PlayerStats {
     name: string;
     wins: number;
     losses: number;
-    total_spent: number;
-    matches_played: number;
-    win_rate: number;
+    totalSpent: number;
+    matchesPlayed: number;
+    winRate: number;
 }
 
 export interface ExpenseData {
@@ -48,6 +48,7 @@ export interface CreateMatchDTO {
     loser: string;
     cost: number;
     participants?: string[];
+    details?: { name: string; wins: number; losses: number }[];
 }
 
 export interface CreatePlayerDTO {

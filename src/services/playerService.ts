@@ -57,31 +57,26 @@ export class PlayerService {
                 SELECT 
                     p.id,
                     p.name,
-                    COALESCE(w.wins, 0) as wins,
-                    COALESCE(l.losses, 0) as losses,
-                    COALESCE(s.total_spent, 0) as total_spent,
-                    (COALESCE(w.wins, 0) + COALESCE(l.losses, 0)) as matches_played,
+                    COALESCE(ms.wins, 0) as wins,
+                    COALESCE(ms.losses, 0) as losses,
+                    COALESCE(s.total_spent, 0) as "totalSpent",
+                    (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0)) as "matchesPlayed",
                     CASE 
-                        WHEN (COALESCE(w.wins, 0) + COALESCE(l.losses, 0)) = 0 THEN 0
-                        ELSE ROUND((COALESCE(w.wins, 0)::DECIMAL / (COALESCE(w.wins, 0) + COALESCE(l.losses, 0))) * 100, 2)
-                    END as win_rate
+                        WHEN (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0)) = 0 THEN 0
+                        ELSE ROUND((COALESCE(ms.wins, 0)::DECIMAL / (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0))) * 100, 2)
+                    END as "winRate"
                 FROM players p
                 LEFT JOIN (
-                    SELECT winner_id, COUNT(*) as wins 
-                    FROM matches 
-                    GROUP BY winner_id
-                ) w ON p.id = w.winner_id
-                LEFT JOIN (
-                    SELECT loser_id, COUNT(*) as losses 
-                    FROM matches 
-                    GROUP BY loser_id
-                ) l ON p.id = l.loser_id
+                    SELECT player_id, SUM(wins) as wins, SUM(losses) as losses
+                    FROM match_stats 
+                    GROUP BY player_id
+                ) ms ON p.id = ms.player_id
                 LEFT JOIN (
                     SELECT payer_id, SUM(cost) as total_spent 
                     FROM matches 
                     GROUP BY payer_id
                 ) s ON p.id = s.payer_id
-                ORDER BY wins DESC, win_rate DESC
+                ORDER BY wins DESC, "winRate" DESC
             `;
       return stats;
     } catch (error) {
@@ -98,27 +93,21 @@ export class PlayerService {
                 SELECT 
                     p.id,
                     p.name,
-                    COALESCE(w.wins, 0) as wins,
-                    COALESCE(l.losses, 0) as losses,
-                    COALESCE(s.total_spent, 0) as total_spent,
-                    (COALESCE(w.wins, 0) + COALESCE(l.losses, 0)) as matches_played,
+                    COALESCE(ms.wins, 0) as wins,
+                    COALESCE(ms.losses, 0) as losses,
+                    COALESCE(s.total_spent, 0) as "totalSpent",
+                    (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0)) as "matchesPlayed",
                     CASE 
-                        WHEN (COALESCE(w.wins, 0) + COALESCE(l.losses, 0)) = 0 THEN 0
-                        ELSE ROUND((COALESCE(w.wins, 0)::DECIMAL / (COALESCE(w.wins, 0) + COALESCE(l.losses, 0))) * 100, 2)
-                    END as win_rate
+                        WHEN (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0)) = 0 THEN 0
+                        ELSE ROUND((COALESCE(ms.wins, 0)::DECIMAL / (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0))) * 100, 2)
+                    END as "winRate"
                 FROM players p
                 LEFT JOIN (
-                    SELECT winner_id, COUNT(*) as wins 
-                    FROM matches 
-                    WHERE winner_id = ${id}
-                    GROUP BY winner_id
-                ) w ON p.id = w.winner_id
-                LEFT JOIN (
-                    SELECT loser_id, COUNT(*) as losses 
-                    FROM matches 
-                    WHERE loser_id = ${id}
-                    GROUP BY loser_id
-                ) l ON p.id = l.loser_id
+                    SELECT player_id, SUM(wins) as wins, SUM(losses) as losses
+                    FROM match_stats 
+                    WHERE player_id = ${id}
+                    GROUP BY player_id
+                ) ms ON p.id = ms.player_id
                 LEFT JOIN (
                     SELECT payer_id, SUM(cost) as total_spent 
                     FROM matches 
@@ -134,9 +123,9 @@ export class PlayerService {
           name: player.name,
           wins: 0,
           losses: 0,
-          total_spent: 0,
-          matches_played: 0,
-          win_rate: 0,
+          totalSpent: 0,
+          matchesPlayed: 0,
+          winRate: 0,
         }
       );
     } catch (error) {

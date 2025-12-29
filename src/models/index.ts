@@ -1,6 +1,8 @@
 import { PlayerModel } from "./PlayerModel";
+import sql from "../db";
 import { MatchModel } from "./MatchModel";
 import { PayerRotationModel } from "./PayerRotationModel";
+import { MatchStatsModel } from "./MatchStatsModel";
 
 export class Migration {
   static async runMigrations(): Promise<void> {
@@ -10,7 +12,11 @@ export class Migration {
       // Create tables in the correct order (respecting foreign key dependencies)
       await PlayerModel.createTable();
       await MatchModel.createTable();
+      await MatchStatsModel.createTable();
       await PayerRotationModel.createTable();
+
+      // Backfill stats
+      await MatchStatsModel.backfillFromMatches();
 
       // Initialize payer rotation if players exist
       const players = await PlayerModel.findAll();
@@ -32,6 +38,7 @@ export class Migration {
     try {
       // Drop tables in reverse order (to handle foreign key constraints)
       await PayerRotationModel.dropTable();
+      await sql`DROP TABLE IF EXISTS match_stats CASCADE`; // MatchStatsModel doesn't have dropTable method yet, using sql directly or add method
       await MatchModel.dropTable();
       await PlayerModel.dropTable();
 
@@ -51,4 +58,5 @@ export class Migration {
 export * from "./PlayerModel";
 export * from "./MatchModel";
 export * from "./PayerRotationModel";
+export * from "./MatchStatsModel";
 export * from "./BaseModel";

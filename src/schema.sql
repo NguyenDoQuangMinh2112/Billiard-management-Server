@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS matches (
     cost DECIMAL(10, 2) NOT NULL,
     date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    participants TEXT[],
     
     -- Foreign key constraints with CASCADE for data integrity
     CONSTRAINT fk_matches_winner FOREIGN KEY (winner_id) 
@@ -57,6 +58,18 @@ CREATE TABLE IF NOT EXISTS payer_rotation (
     CONSTRAINT single_rotation_record CHECK (id = 1)
 );
 
+-- Match Detailed Stats Table
+-- Stores granular win/loss data per player per match session
+CREATE TABLE IF NOT EXISTS match_stats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(match_id, player_id)
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -76,6 +89,10 @@ CREATE INDEX IF NOT EXISTS idx_matches_loser_date ON matches(loser_id, date DESC
 
 -- Index for player name searches (case-insensitive, optimizes player lookup)
 CREATE INDEX IF NOT EXISTS idx_players_name_lower ON players(LOWER(name));
+
+-- Indexes for match_stats to optimize stats aggregation
+CREATE INDEX IF NOT EXISTS idx_match_stats_player ON match_stats(player_id);
+CREATE INDEX IF NOT EXISTS idx_match_stats_match ON match_stats(match_id);
 
 -- ============================================================================
 -- FUNCTIONS
@@ -118,15 +135,15 @@ CREATE OR REPLACE VIEW player_stats AS
 SELECT 
     p.id,
     p.name,
-    COALESCE(wins.count, 0)::INTEGER as wins,
-    COALESCE(losses.count, 0)::INTEGER as losses,
+    COALESCE(ms.wins, 0)::INTEGER as wins,
+    COALESCE(ms.losses, 0)::INTEGER as losses,
     COALESCE(spent.total, 0)::DECIMAL(10, 2) as total_spent,
-    (COALESCE(wins.count, 0) + COALESCE(losses.count, 0))::INTEGER as matches_played,
+    (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0))::INTEGER as matches_played,
     CASE 
-        WHEN COALESCE(wins.count, 0) + COALESCE(losses.count, 0) > 0 
+        WHEN COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0) > 0 
         THEN ROUND(
-            (COALESCE(wins.count, 0)::NUMERIC / 
-            (COALESCE(wins.count, 0) + COALESCE(losses.count, 0))) * 100, 
+            (COALESCE(ms.wins, 0)::NUMERIC / 
+            (COALESCE(ms.wins, 0) + COALESCE(ms.losses, 0))) * 100, 
             2
         )
         ELSE 0 
@@ -135,15 +152,10 @@ SELECT
     p.updated_at
 FROM players p
 LEFT JOIN (
-    SELECT winner_id, COUNT(*) as count
-    FROM matches
-    GROUP BY winner_id
-) wins ON p.id = wins.winner_id
-LEFT JOIN (
-    SELECT loser_id, COUNT(*) as count
-    FROM matches
-    GROUP BY loser_id
-) losses ON p.id = losses.loser_id
+    SELECT player_id, SUM(wins) as wins, SUM(losses) as losses
+    FROM match_stats
+    GROUP BY player_id
+) ms ON p.id = ms.player_id
 LEFT JOIN (
     SELECT payer_id, SUM(cost) as total
     FROM matches
@@ -175,6 +187,7 @@ LIMIT 50;
 
 COMMENT ON TABLE players IS 'Stores all billiard players in the system';
 COMMENT ON TABLE matches IS 'Records all match results with winner, loser, payer and cost';
+COMMENT ON TABLE match_stats IS 'Stores granular win/loss data per player per match session';
 COMMENT ON TABLE payer_rotation IS 'Tracks the current payer in the rotation system';
-COMMENT ON VIEW player_stats IS 'Comprehensive statistics for each player including wins, losses, and win rate';
+COMMENT ON VIEW player_stats IS 'Comprehensive statistics for each player including wins, losses, and win rate (aggregated from match_stats)';
 COMMENT ON VIEW recent_matches IS 'Most recent 50 matches with player names for quick access';
