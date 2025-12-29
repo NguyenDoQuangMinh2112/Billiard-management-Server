@@ -68,7 +68,8 @@ export const matchesRouter = new Elysia({ prefix: '/matches' })
         body: t.Object({
             winner: t.String({ minLength: 1 }),
             loser: t.String({ minLength: 1 }),
-            cost: t.Number({ minimum: 0 })
+            cost: t.Number({ minimum: 0 }),
+            participants: t.Optional(t.Array(t.String()))
         })
     })
     

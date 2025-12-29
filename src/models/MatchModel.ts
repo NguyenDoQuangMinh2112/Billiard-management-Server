@@ -15,9 +15,21 @@ export class MatchModel extends BaseModel {
                 cost DECIMAL(10, 2) NOT NULL CHECK (cost >= 0),
                 date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                participants TEXT[],
                 CONSTRAINT different_players CHECK (winner_id != loser_id)
             )
         `;
+
+    // Migration for existing tables: Add participants column
+    try {
+        await sql`
+            ALTER TABLE matches 
+            ADD COLUMN IF NOT EXISTS participants TEXT[]
+        `;
+    } catch (e) {
+        // Ignore if column exists or other minor error
+        // console.log("Migration note:", e);
+    }
 
     // Create indexes for better performance
     await sql`
@@ -43,6 +55,7 @@ export class MatchModel extends BaseModel {
                 w.name as winner,
                 l.name as loser,
                 p.name as payer,
+                m.participants,
                 m.cost,
                 m.date
             FROM matches m
@@ -60,6 +73,7 @@ export class MatchModel extends BaseModel {
                 w.name as winner,
                 l.name as loser,
                 p.name as payer,
+                m.participants,
                 m.cost,
                 m.date
             FROM matches m
@@ -75,7 +89,8 @@ export class MatchModel extends BaseModel {
     winnerName: string,
     loserName: string,
     payerId: number,
-    cost: number
+    cost: number,
+    participants: string[] = []
   ): Promise<Match> {
     // Get winner and loser IDs
     const [winner] =
@@ -91,8 +106,8 @@ export class MatchModel extends BaseModel {
     }
 
     const [match] = await sql<Match[]>`
-            INSERT INTO matches (winner_id, loser_id, payer_id, cost)
-            VALUES (${winner.id}, ${loser.id}, ${payerId}, ${cost})
+            INSERT INTO matches (winner_id, loser_id, payer_id, cost, participants)
+            VALUES (${winner.id}, ${loser.id}, ${payerId}, ${cost}, ${participants})
             RETURNING *
         `;
 
@@ -117,6 +132,7 @@ export class MatchModel extends BaseModel {
                 w.name as winner,
                 l.name as loser,
                 p.name as payer,
+                m.participants,
                 m.cost,
                 m.date
             FROM matches m

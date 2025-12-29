@@ -15,6 +15,7 @@ export interface Match {
     cost: number;
     date: Date;
     created_at: Date;
+    participants?: string[];
 }
 
 export interface MatchWithNames {
@@ -24,6 +25,7 @@ export interface MatchWithNames {
     payer: string;
     cost: number;
     date: Date;
+    participants?: string[];
 }
 
 export interface PlayerStats {
@@ -45,6 +47,7 @@ export interface CreateMatchDTO {
     winner: string;
     loser: string;
     cost: number;
+    participants?: string[];
 }
 
 export interface CreatePlayerDTO {

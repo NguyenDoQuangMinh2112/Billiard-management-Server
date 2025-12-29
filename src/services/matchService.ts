@@ -20,14 +20,35 @@ export class MatchService {
     return await MatchModel.findById(id);
   }
 
-  // Create a new match
+  // Create a new match with enhanced validation and error handling
   async createMatch(data: CreateMatchDTO): Promise<MatchWithNames> {
-    // Get player IDs
-    const winner = await playerService.getPlayerByName(data.winner);
-    const loser = await playerService.getPlayerByName(data.loser);
+    // Validate input data
+    if (!data.winner || !data.loser) {
+      throw new Error("Winner and loser names are required");
+    }
 
-    if (!winner || !loser) {
-      throw new Error("Winner or loser not found");
+    if (typeof data.cost !== 'number' || data.cost < 0) {
+      throw new Error("Cost must be a non-negative number");
+    }
+
+    // Trim and normalize names
+    const winnerName = data.winner.trim();
+    const loserName = data.loser.trim();
+
+    if (winnerName === loserName) {
+      throw new Error("Winner and loser must be different players");
+    }
+
+    // Get player IDs with better error messages
+    const winner = await playerService.getPlayerByName(winnerName);
+    const loser = await playerService.getPlayerByName(loserName);
+
+    if (!winner) {
+      throw new Error(`Player "${winnerName}" not found. Please check the name and try again.`);
+    }
+
+    if (!loser) {
+      throw new Error(`Player "${loserName}" not found. Please check the name and try again.`);
     }
 
     if (winner.id === loser.id) {
@@ -37,27 +58,48 @@ export class MatchService {
     // Get current payer from rotation
     const currentPayer = await PayerRotationModel.getCurrentPayer();
     if (!currentPayer) {
-      throw new Error("Payer rotation not initialized");
+      // Initialize payer rotation if not set
+      await PayerRotationModel.initializeWithFirstPlayer();
+      const newPayer = await PayerRotationModel.getCurrentPayer();
+      if (!newPayer) {
+        throw new Error("Failed to initialize payer rotation system");
+      }
     }
 
-    // Create the match
-    const match = await MatchModel.create(
-      data.winner,
-      data.loser,
-      currentPayer.current_payer_id,
-      data.cost
-    );
-
-    // Rotate to next payer
-    await PayerRotationModel.rotateToNextPayer();
-
-    // Get the match with names
-    const matchWithNames = await this.getMatchById(match.id);
-    if (!matchWithNames) {
-      throw new Error("Failed to retrieve created match");
+    const payer = await PayerRotationModel.getCurrentPayer();
+    if (!payer) {
+      throw new Error("Payer rotation not properly initialized");
     }
 
-    return matchWithNames;
+    try {
+      // Create the match with validated data
+      const match = await MatchModel.create(
+        winnerName,
+        loserName,
+        payer.current_payer_id,
+        data.cost,
+        data.participants
+      );
+
+      // Rotate to next payer after successful match creation
+      await PayerRotationModel.rotateToNextPayer();
+
+      // Get the match with names for response
+      const matchWithNames = await this.getMatchById(match.id);
+      if (!matchWithNames) {
+        throw new Error("Failed to retrieve created match details");
+      }
+
+      console.log(`✅ Match created: ${winnerName} defeated ${loserName}, Cost: ${data.cost}`);
+      return matchWithNames;
+    } catch (error) {
+      console.error("Error creating match:", error);
+      throw new Error(
+        error instanceof Error 
+          ? error.message 
+          : "An unexpected error occurred while creating the match"
+      );
+    }
   }
 
   // Delete a match
