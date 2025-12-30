@@ -3,7 +3,6 @@ import { cors } from "@elysiajs/cors";
 import { playersRouter } from "./src/routes/players";
 import { matchesRouter } from "./src/routes/matches";
 import { statsRouter } from "./src/routes/stats";
-import { playerService } from "./src/services/playerService";
 import { Migration, PlayerModel } from "./src/models";
 import { ErrorHandler, AppError } from "./src/errors";
 import { logger } from "./src/utils/logger";
@@ -19,17 +18,6 @@ const app = new Elysia()
       credentials: false,
     })
   )
-
-  // Request logging (Disabled by user request)
-  // .onRequest(({ request }) => {
-  //   const start = Date.now();
-  //   logger.info("Incoming request", {
-  //     method: request.method,
-  //     url: request.url,
-  //     timestamp: new Date().toISOString(),
-  //   });
-  //   (request as any).startTime = start;
-  // })
 
   // Health check endpoint
   .get("/", () => ({
@@ -89,43 +77,6 @@ const app = new Elysia()
         }
       })
   )
-
-  // Initialize database and run migrations on server start
-  .onStart(async () => {
-    const mode = config.server.isProduction ? "PRODUCTION" : "DEVELOPMENT";
-    // logger.info(`Starting Billiard Management Server v2.0.0 in ${mode} mode`, {
-    //   port: config.server.port,
-    //   host: config.server.host,
-    //   logLevel: config.server.logLevel,
-    // });
-
-    try {
-      // Test database connection
-      await sql`SELECT 1`;
-      // logger.info("Database connection established");
-
-      // Run database migrations
-      await Migration.runMigrations();
-      // logger.info("Database migrations completed");
-
-      // Initialize default players in development
-      if (config.features.autoInitPlayers) {
-        await playerService.initializeDefaultPlayers();
-        // logger.info("Default players initialized");
-      }
-    } catch (error) {
-      logger.error("Database initialization failed", { error });
-
-      if (config.server.isProduction) {
-        logger.error("CRITICAL: Database required for production server");
-        process.exit(1);
-      }
-
-      logger.warn(
-        "Development mode: Server running with limited functionality"
-      );
-    }
-  })
 
   // Enhanced error handling
   .onError(({ code, error, set }) => {
