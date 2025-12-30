@@ -51,7 +51,15 @@ export class PlayerService {
     return await PlayerModel.delete(id);
   }
 
-  async getAllStats(): Promise<PlayerStats[]> {
+  async getAllStats(timeframe: 'all' | 'daily' | 'today' = 'all'): Promise<PlayerStats[]> {
+    // Use Daily Champion logic for 'daily' timeframe
+    if (timeframe === 'daily') {
+        return this.getDailyChampionStats();
+    }
+    
+    // 'today' shows match stats for current date only
+    const isToday = timeframe === 'today';
+      
     try {
       const stats = await sql<PlayerStats[]>`
                 SELECT 
@@ -67,13 +75,16 @@ export class PlayerService {
                     END as "winRate"
                 FROM players p
                 LEFT JOIN (
-                    SELECT player_id, SUM(wins) as wins, SUM(losses) as losses
-                    FROM match_stats 
-                    GROUP BY player_id
+                    SELECT ms.player_id, SUM(ms.wins) as wins, SUM(ms.losses) as losses
+                    FROM match_stats ms
+                    ${isToday ? sql`JOIN matches m ON ms.match_id = m.id` : sql``}
+                    ${isToday ? sql`WHERE DATE(m.date) = CURRENT_DATE` : sql``}
+                    GROUP BY ms.player_id
                 ) ms ON p.id = ms.player_id
                 LEFT JOIN (
                     SELECT payer_id, SUM(cost) as total_spent 
                     FROM matches 
+                    ${isToday ? sql`WHERE DATE(date) = CURRENT_DATE` : sql``}
                     GROUP BY payer_id
                 ) s ON p.id = s.payer_id
                 ORDER BY wins DESC, "winRate" DESC
@@ -82,6 +93,107 @@ export class PlayerService {
     } catch (error) {
       logger.error("Failed to get player stats", { error });
       throw error;
+    }
+  }
+
+  async getDailyChampionStats(): Promise<PlayerStats[]> {
+    try {
+        // 1. Get all matches with their participants
+        const matchesData = await sql`
+            SELECT 
+                m.id as match_id,
+                m.participants as participants
+            FROM matches m
+            WHERE m.participants IS NOT NULL AND array_length(m.participants, 1) > 0
+            ORDER BY m.date
+        `;
+
+        // 2. Initialize player aggregation map
+        const playerAgg = new Map<string, {
+            name: string;
+            wins: number;
+            losses: number;
+            matchesPlayed: number;
+        }>();
+
+        const allPlayers = await this.getAllPlayers();
+        allPlayers.forEach(p => {
+            playerAgg.set(p.name, { 
+                name: p.name, 
+                wins: 0, 
+                losses: 0,
+                matchesPlayed: 0
+            });
+        });
+
+        // 3. Process each match: First person wins, others lose
+        matchesData.forEach((row: any) => {
+            const participants = row.participants || [];
+            
+            if (participants.length > 0) {
+                // First person in participants array is the winner
+                const winner = String(participants[0] || '');
+                
+                // Process all participants
+                participants.forEach((playerName: any, index: number) => {
+                    const name = String(playerName || '');
+                    const stats = playerAgg.get(name);
+                    
+                    if (stats) {
+                        stats.matchesPlayed++;
+                        if (index === 0) {
+                            stats.wins++;  // Winner
+                        } else {
+                            stats.losses++; // Loser
+                        }
+                    }
+                });
+            }
+        });
+
+        // 4. Get total spent (remains global)
+        const expenseStats = await sql`
+            SELECT p.name, SUM(m.cost) as total_spent 
+            FROM matches m
+            JOIN players p ON m.payer_id = p.id
+            GROUP BY p.name
+        `;
+        const expenseMap = new Map<string, number>();
+        expenseStats.forEach((row: any) => {
+            expenseMap.set(row.name, parseFloat(row.total_spent || '0'));
+        });
+
+        // 5. Transform to PlayerStats format
+        const results: PlayerStats[] = [];
+        const playerIdMap = new Map<string, number>();
+        allPlayers.forEach(p => playerIdMap.set(p.name, p.id));
+
+        playerAgg.forEach((stats, playerName) => {
+            const totalSpent = expenseMap.get(playerName) || 0;
+            const totalGames = stats.wins + stats.losses;
+            const winRate = totalGames > 0 ? parseFloat(((stats.wins / totalGames) * 100).toFixed(2)) : 0;
+            const playerId = playerIdMap.get(playerName) || 0;
+
+            results.push({
+                id: playerId,
+                name: playerName,
+                wins: stats.wins,
+                losses: stats.losses,
+                totalSpent: totalSpent,
+                matchesPlayed: totalGames,
+                winRate: winRate
+            });
+        });
+
+        // 6. Sort by wins, then win rate
+        return results.sort((a, b) => {
+            if (b.wins !== a.wins) return b.wins - a.wins;
+            return b.winRate - a.winRate;
+        });
+
+    } catch (error) {
+        logger.error("Failed to calculate daily champion stats", { error });
+        throw error;
     }
   }
 

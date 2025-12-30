@@ -4,9 +4,10 @@ import { matchService } from '../services/matchService';
 
 export const statsRouter = new Elysia({ prefix: '/stats' })
     // Get all player statistics
-    .get('/', async () => {
+    .get('/', async ({ query }) => {
         try {
-            const stats = await playerService.getAllStats();
+            const timeframe = (query?.timeframe || 'all') as 'all' | 'today';
+            const stats = await playerService.getAllStats(timeframe);
             return { success: true, data: stats };
         } catch (error) {
             return { 
@@ -14,6 +15,14 @@ export const statsRouter = new Elysia({ prefix: '/stats' })
                 error: error instanceof Error ? error.message : 'Failed to fetch statistics' 
             };
         }
+    }, {
+        query: t.Object({
+            timeframe: t.Optional(t.Union([
+                t.Literal('all'),
+                t.Literal('daily'),
+                t.Literal('today')
+            ]))
+        })
     })
     
     // Get statistics for a specific player
