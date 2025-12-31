@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { playersRouter } from "./src/routes/players";
 import { matchesRouter } from "./src/routes/matches";
 import { statsRouter } from "./src/routes/stats";
+import { badgesRouter } from "./src/routes/badges";
 import { Migration, PlayerModel } from "./src/models";
 import { ErrorHandler, AppError } from "./src/errors";
 import { logger } from "./src/utils/logger";
@@ -34,13 +35,13 @@ const app = new Elysia()
     const dbHealthy = await sql`SELECT 1 as health`
       .then(() => true)
       .catch(() => false);
-    
+
     // Check if players table exists
-    const playersTableExists = dbHealthy 
+    const playersTableExists = dbHealthy
       ? await PlayerModel.tableExists().catch(() => false)
       : false;
 
-    const status = (dbHealthy && playersTableExists) ? "healthy" : "unhealthy";
+    const status = dbHealthy && playersTableExists ? "healthy" : "unhealthy";
 
     return {
       success: true,
@@ -49,7 +50,7 @@ const app = new Elysia()
       services: {
         database: dbHealthy ? "up" : "down",
         tables: {
-          players: playersTableExists ? "exists" : "missing"
+          players: playersTableExists ? "exists" : "missing",
         },
         server: "up",
       },
@@ -62,6 +63,7 @@ const app = new Elysia()
       .use(playersRouter)
       .use(matchesRouter)
       .use(statsRouter)
+      .use(badgesRouter)
       // Temporary migration endpoint
       .post("/migrate", async () => {
         try {
@@ -71,8 +73,7 @@ const app = new Elysia()
           logger.error("Migration failed manually", { error });
           return {
             success: false,
-            error:
-              error instanceof Error ? error.message : "Migration failed",
+            error: error instanceof Error ? error.message : "Migration failed",
           };
         }
       })

@@ -3,6 +3,7 @@ import sql from "../db";
 import { MatchModel } from "./MatchModel";
 import { PayerRotationModel } from "./PayerRotationModel";
 import { MatchStatsModel } from "./MatchStatsModel";
+import { BadgeModel } from "./BadgeModel";
 
 export class Migration {
   static async runMigrations(): Promise<void> {
@@ -14,6 +15,8 @@ export class Migration {
       await MatchModel.createTable();
       await MatchStatsModel.createTable();
       await PayerRotationModel.createTable();
+      await BadgeModel.createTable();
+      await BadgeModel.seedBadges();
 
       // Backfill stats
       await MatchStatsModel.backfillFromMatches();
@@ -58,5 +61,6 @@ export class Migration {
 export * from "./PlayerModel";
 export * from "./MatchModel";
 export * from "./PayerRotationModel";
+export * from "./BadgeModel";
 export * from "./MatchStatsModel";
 export * from "./BaseModel";

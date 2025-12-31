@@ -9,6 +9,7 @@ import type {
   ExpenseData,
 } from "../types";
 import { playerService } from "./playerService";
+import { badgeService } from "./badgeService";
 
 export class MatchService {
   // Get all matches with player names
@@ -24,36 +25,50 @@ export class MatchService {
   // Create a new match with enhanced validation and error handling
   async createMatch(data: CreateMatchDTO): Promise<MatchWithNames> {
     // Validate input data
-    if (!data.winner || !data.loser) {
-      throw new Error("Winner and loser names are required");
+    if (!data.winners || data.winners.length === 0) {
+      throw new Error("At least one winner is required");
     }
 
-    if (typeof data.cost !== 'number' || data.cost < 0) {
+    if (!data.loser) {
+      throw new Error("Loser name is required");
+    }
+
+    if (typeof data.cost !== "number" || data.cost < 0) {
       throw new Error("Cost must be a non-negative number");
     }
 
     // Trim and normalize names
-    const winnerName = data.winner.trim();
+    const winnerNames = data.winners.map(name => name.trim());
     const loserName = data.loser.trim();
 
-    if (winnerName === loserName) {
-      throw new Error("Winner and loser must be different players");
+    // Validate that winners don't include the loser
+    if (winnerNames.includes(loserName)) {
+      throw new Error("Winners cannot include the loser");
     }
 
-    // Get player IDs with better error messages
-    const winner = await playerService.getPlayerByName(winnerName);
+    // Get player objects with better error messages
+    const winners = [];
+    for (const winnerName of winnerNames) {
+      const winner = await playerService.getPlayerByName(winnerName);
+      if (!winner) {
+        throw new Error(
+          `Player "${winnerName}" not found. Please check the name and try again.`
+        );
+      }
+      winners.push(winner);
+    }
+
     const loser = await playerService.getPlayerByName(loserName);
-
-    if (!winner) {
-      throw new Error(`Player "${winnerName}" not found. Please check the name and try again.`);
-    }
-
     if (!loser) {
-      throw new Error(`Player "${loserName}" not found. Please check the name and try again.`);
+      throw new Error(
+        `Player "${loserName}" not found. Please check the name and try again.`
+      );
     }
 
-    if (winner.id === loser.id) {
-      throw new Error("Winner and loser must be different players");
+    // Validate no duplicates in winners
+    const uniqueWinnerIds = new Set(winners.map(w => w.id));
+    if (uniqueWinnerIds.size !== winners.length) {
+      throw new Error("Duplicate winners are not allowed");
     }
 
     // Get current payer from rotation
@@ -75,7 +90,7 @@ export class MatchService {
     try {
       // Create the match with validated data
       const match = await MatchModel.create(
-        winnerName,
+        winnerNames,
         loserName,
         payer.current_payer_id,
         data.cost,
@@ -89,30 +104,33 @@ export class MatchService {
       if (data.details && data.details.length > 0) {
         for (const detail of data.details) {
           try {
-             const player = await playerService.getPlayerByName(detail.name);
-             if (player) {
-                await MatchStatsModel.addStats(match.id, player.id, detail.wins, detail.losses);
-             }
+            const player = await playerService.getPlayerByName(detail.name);
+            if (player) {
+              await MatchStatsModel.addStats(
+                match.id,
+                player.id,
+                detail.wins,
+                detail.losses
+              );
+            }
           } catch (e) {
-             console.error("Error saving stats for player:", detail.name, e);
+            console.error("Error saving stats for player:", detail.name, e);
           }
         }
       } else if (data.participants && data.participants.length > 0) {
-        // Fallback: If no details but participants exist, create 0-0 or infer from winner/loser?
-        // Winner gets 1-0, Loser gets 0-1, others 0-0.
-        // This is handled by "backfill" logic? No.
-        // Let's explicitly save for NEW matches to be safe.
+        // Fallback: If no details but participants exist
+        // Winners get 1-0, Loser gets 0-1, others 0-0.
         for (const pName of data.participants) {
-            try {
-                const player = await playerService.getPlayerByName(pName);
-                if (player) {
-                    const isWinner = pName === winnerName;
-                    const isLoser = pName === loserName;
-                    const wins = isWinner ? 1 : 0;
-                    const losses = isLoser ? 1 : 0;
-                     await MatchStatsModel.addStats(match.id, player.id, wins, losses);
-                }
-            } catch (e) {}
+          try {
+            const player = await playerService.getPlayerByName(pName);
+            if (player) {
+              const isWinner = winnerNames.includes(pName);
+              const isLoser = pName === loserName;
+              const wins = isWinner ? 1 : 0;
+              const losses = isLoser ? 1 : 0;
+              await MatchStatsModel.addStats(match.id, player.id, wins, losses);
+            }
+          } catch (e) {}
         }
       }
 
@@ -122,13 +140,21 @@ export class MatchService {
         throw new Error("Failed to retrieve created match details");
       }
 
-      console.log(`✅ Match created: ${winnerName} defeated ${loserName}, Cost: ${data.cost}`);
+      // Check and award badges after match creation - award to all winners
+      for (const winner of winners) {
+        await badgeService.checkBadgesAfterMatch(winner.id, loser.id);
+      }
+
+      const matchType = winnerNames.length > 1 ? 'Draw' : 'Win';
+      console.log(
+        `✅ Match created (${matchType}): ${winnerNames.join(', ')} vs ${loserName}, Cost: ${data.cost}`
+      );
       return matchWithNames;
     } catch (error) {
       console.error("Error creating match:", error);
       throw new Error(
-        error instanceof Error 
-          ? error.message 
+        error instanceof Error
+          ? error.message
           : "An unexpected error occurred while creating the match"
       );
     }

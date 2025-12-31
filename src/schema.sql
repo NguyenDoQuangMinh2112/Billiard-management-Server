@@ -18,29 +18,29 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 -- Matches Table
--- Records all billiard match results with winner, loser, payer, and cost
+-- Records all billiard match results with winners (supporting multiple), loser, payer, and cost
 CREATE TABLE IF NOT EXISTS matches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    winner_id INTEGER NOT NULL,
+    winners INTEGER[] NOT NULL, -- Array of winner player IDs to support draws/multiple winners
     loser_id INTEGER NOT NULL,
     payer_id INTEGER NOT NULL,
     cost DECIMAL(10, 2) NOT NULL,
     date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     participants TEXT[],
+    match_result VARCHAR(20) DEFAULT 'win', -- 'win', 'draw', or 'tie' for UI display
     
     -- Foreign key constraints with CASCADE for data integrity
-    CONSTRAINT fk_matches_winner FOREIGN KEY (winner_id) 
-        REFERENCES players(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    -- Note: Arrays don't support direct FK constraints, validated in application logic
     CONSTRAINT fk_matches_loser FOREIGN KEY (loser_id) 
         REFERENCES players(id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_matches_payer FOREIGN KEY (payer_id) 
         REFERENCES players(id) ON DELETE CASCADE ON UPDATE CASCADE,
     
     -- Business logic constraints
-    CONSTRAINT different_players CHECK (winner_id != loser_id),
     CONSTRAINT positive_cost CHECK (cost >= 0),
-    CONSTRAINT valid_date CHECK (date <= CURRENT_TIMESTAMP + INTERVAL '1 day')
+    CONSTRAINT valid_date CHECK (date <= CURRENT_TIMESTAMP + INTERVAL '1 day'),
+    CONSTRAINT winners_not_empty CHECK (array_length(winners, 1) > 0)
 );
 
 -- Payer Rotation Table
@@ -70,6 +70,28 @@ CREATE TABLE IF NOT EXISTS match_stats (
     UNIQUE(match_id, player_id)
 );
 
+-- Badges Table
+-- Stores all available achievement badges
+CREATE TABLE IF NOT EXISTS badges (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    criterion TEXT NOT NULL,
+    short_description TEXT NOT NULL,
+    icon VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Player Badges Table
+-- Junction table tracking which badges have been awarded to which players
+CREATE TABLE IF NOT EXISTS player_badges (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    badge_id VARCHAR(50) NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
+    match_id UUID REFERENCES matches(id) ON DELETE SET NULL,
+    awarded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(player_id, badge_id, match_id)
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -77,14 +99,13 @@ CREATE TABLE IF NOT EXISTS match_stats (
 -- These indexes are optimized for common query patterns in the application
 
 -- Indexes for matches table to optimize common queries
-CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches(winner_id);
+CREATE INDEX IF NOT EXISTS idx_matches_winners ON matches USING GIN(winners); -- GIN index for array queries
 CREATE INDEX IF NOT EXISTS idx_matches_loser ON matches(loser_id);
 CREATE INDEX IF NOT EXISTS idx_matches_payer ON matches(payer_id);
 CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date DESC);
 CREATE INDEX IF NOT EXISTS idx_matches_created_at ON matches(created_at DESC);
 
 -- Composite index for player statistics queries (optimizes leaderboard)
-CREATE INDEX IF NOT EXISTS idx_matches_winner_date ON matches(winner_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_matches_loser_date ON matches(loser_id, date DESC);
 
 -- Index for player name searches (case-insensitive, optimizes player lookup)
@@ -93,6 +114,10 @@ CREATE INDEX IF NOT EXISTS idx_players_name_lower ON players(LOWER(name));
 -- Indexes for match_stats to optimize stats aggregation
 CREATE INDEX IF NOT EXISTS idx_match_stats_player ON match_stats(player_id);
 CREATE INDEX IF NOT EXISTS idx_match_stats_match ON match_stats(match_id);
+
+-- Indexes for player_badges to optimize badge queries
+CREATE INDEX IF NOT EXISTS idx_player_badges_player ON player_badges(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_badges_badge ON player_badges(badge_id);
 
 -- ============================================================================
 -- FUNCTIONS
@@ -169,13 +194,17 @@ CREATE OR REPLACE VIEW recent_matches AS
 SELECT 
     m.id,
     m.date,
-    w.name as winner,
+    ARRAY(
+        SELECT pl.name 
+        FROM unnest(m.winners) AS winner_id
+        JOIN players pl ON pl.id = winner_id
+    ) as winners,
     l.name as loser,
     p.name as payer,
     m.cost,
+    m.match_result,
     m.created_at
 FROM matches m
-JOIN players w ON m.winner_id = w.id
 JOIN players l ON m.loser_id = l.id
 JOIN players p ON m.payer_id = p.id
 ORDER BY m.date DESC
@@ -189,5 +218,7 @@ COMMENT ON TABLE players IS 'Stores all billiard players in the system';
 COMMENT ON TABLE matches IS 'Records all match results with winner, loser, payer and cost';
 COMMENT ON TABLE match_stats IS 'Stores granular win/loss data per player per match session';
 COMMENT ON TABLE payer_rotation IS 'Tracks the current payer in the rotation system';
+COMMENT ON TABLE badges IS 'Stores all available achievement badges';
+COMMENT ON TABLE player_badges IS 'Junction table tracking which badges have been awarded to which players';
 COMMENT ON VIEW player_stats IS 'Comprehensive statistics for each player including wins, losses, and win rate (aggregated from match_stats)';
 COMMENT ON VIEW recent_matches IS 'Most recent 50 matches with player names for quick access';

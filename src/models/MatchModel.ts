@@ -52,14 +52,18 @@ export class MatchModel extends BaseModel {
     return await sql<MatchWithNames[]>`
             SELECT 
                 m.id,
-                w.name as winner,
+                ARRAY(
+                    SELECT pl.name 
+                    FROM unnest(m.winners) AS winner_id
+                    JOIN players pl ON pl.id = winner_id
+                ) as winners,
                 l.name as loser,
                 p.name as payer,
                 m.participants,
                 m.cost,
-                m.date
+                m.date,
+                m.match_result
             FROM matches m
-            JOIN players w ON m.winner_id = w.id
             JOIN players l ON m.loser_id = l.id
             JOIN players p ON m.payer_id = p.id
             ORDER BY m.date DESC
@@ -70,14 +74,18 @@ export class MatchModel extends BaseModel {
     const [match] = await sql<MatchWithNames[]>`
             SELECT 
                 m.id,
-                w.name as winner,
+                ARRAY(
+                    SELECT pl.name 
+                    FROM unnest(m.winners) AS winner_id
+                    JOIN players pl ON pl.id = winner_id
+                ) as winners,
                 l.name as loser,
                 p.name as payer,
                 m.participants,
                 m.cost,
-                m.date
+                m.date,
+                m.match_result
             FROM matches m
-            JOIN players w ON m.winner_id = w.id
             JOIN players l ON m.loser_id = l.id
             JOIN players p ON m.payer_id = p.id
             WHERE m.id = ${id}
@@ -86,28 +94,39 @@ export class MatchModel extends BaseModel {
   }
 
   static async create(
-    winnerName: string,
+    winnerNames: string[], // Changed to array to support multiple winners
     loserName: string,
     payerId: number,
     cost: number,
     participants: string[] = []
   ): Promise<Match> {
-    // Get winner and loser IDs
-    const [winner] =
-      await sql`SELECT id FROM players WHERE name = ${winnerName}`;
+    // Get winner IDs - support multiple winners
+    const winnerIds: number[] = [];
+    for (const winnerName of winnerNames) {
+      const [winner] = await sql`SELECT id FROM players WHERE name = ${winnerName}`;
+      if (!winner) {
+        throw new Error(`Winner "${winnerName}" not found`);
+      }
+      winnerIds.push(winner.id);
+    }
+
+    // Get loser ID
     const [loser] = await sql`SELECT id FROM players WHERE name = ${loserName}`;
-
-    if (!winner || !loser) {
-      throw new Error("Winner or loser not found");
+    if (!loser) {
+      throw new Error("Loser not found");
     }
 
-    if (winner.id === loser.id) {
-      throw new Error("Winner and loser must be different players");
+    // Ensure winners don't include the loser
+    if (winnerIds.includes(loser.id)) {
+      throw new Error("Winners cannot include the loser");
     }
+
+    // Determine match result
+    const matchResult = winnerIds.length > 1 ? 'draw' : 'win';
 
     const [match] = await sql<Match[]>`
-            INSERT INTO matches (winner_id, loser_id, payer_id, cost, participants)
-            VALUES (${winner.id}, ${loser.id}, ${payerId}, ${cost}, ${participants})
+            INSERT INTO matches (winners, loser_id, payer_id, cost, participants, match_result)
+            VALUES (${winnerIds}, ${loser.id}, ${payerId}, ${cost}, ${participants}, ${matchResult})
             RETURNING *
         `;
 
@@ -129,14 +148,18 @@ export class MatchModel extends BaseModel {
     return await sql<MatchWithNames[]>`
             SELECT 
                 m.id,
-                w.name as winner,
+                ARRAY(
+                    SELECT pl.name 
+                    FROM unnest(m.winners) AS winner_id
+                    JOIN players pl ON pl.id = winner_id
+                ) as winners,
                 l.name as loser,
                 p.name as payer,
                 m.participants,
                 m.cost,
-                m.date
+                m.date,
+                m.match_result
             FROM matches m
-            JOIN players w ON m.winner_id = w.id
             JOIN players l ON m.loser_id = l.id
             JOIN players p ON m.payer_id = p.id
             ORDER BY m.date DESC
