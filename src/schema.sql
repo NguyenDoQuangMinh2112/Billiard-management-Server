@@ -70,28 +70,6 @@ CREATE TABLE IF NOT EXISTS match_stats (
     UNIQUE(match_id, player_id)
 );
 
--- Badges Table
--- Stores all available achievement badges
-CREATE TABLE IF NOT EXISTS badges (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    criterion TEXT NOT NULL,
-    short_description TEXT NOT NULL,
-    icon VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Player Badges Table
--- Junction table tracking which badges have been awarded to which players
-CREATE TABLE IF NOT EXISTS player_badges (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    badge_id VARCHAR(50) NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
-    match_id UUID REFERENCES matches(id) ON DELETE SET NULL,
-    awarded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(player_id, badge_id, match_id)
-);
-
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -114,10 +92,6 @@ CREATE INDEX IF NOT EXISTS idx_players_name_lower ON players(LOWER(name));
 -- Indexes for match_stats to optimize stats aggregation
 CREATE INDEX IF NOT EXISTS idx_match_stats_player ON match_stats(player_id);
 CREATE INDEX IF NOT EXISTS idx_match_stats_match ON match_stats(match_id);
-
--- Indexes for player_badges to optimize badge queries
-CREATE INDEX IF NOT EXISTS idx_player_badges_player ON player_badges(player_id);
-CREATE INDEX IF NOT EXISTS idx_player_badges_badge ON player_badges(badge_id);
 
 -- ============================================================================
 -- FUNCTIONS
@@ -218,7 +192,5 @@ COMMENT ON TABLE players IS 'Stores all billiard players in the system';
 COMMENT ON TABLE matches IS 'Records all match results with winner, loser, payer and cost';
 COMMENT ON TABLE match_stats IS 'Stores granular win/loss data per player per match session';
 COMMENT ON TABLE payer_rotation IS 'Tracks the current payer in the rotation system';
-COMMENT ON TABLE badges IS 'Stores all available achievement badges';
-COMMENT ON TABLE player_badges IS 'Junction table tracking which badges have been awarded to which players';
 COMMENT ON VIEW player_stats IS 'Comprehensive statistics for each player including wins, losses, and win rate (aggregated from match_stats)';
 COMMENT ON VIEW recent_matches IS 'Most recent 50 matches with player names for quick access';

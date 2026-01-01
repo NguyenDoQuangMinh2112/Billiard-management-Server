@@ -9,7 +9,6 @@ import type {
   ExpenseData,
 } from "../types";
 import { playerService } from "./playerService";
-import { badgeService } from "./badgeService";
 
 export class MatchService {
   // Get all matches with player names
@@ -38,7 +37,7 @@ export class MatchService {
     }
 
     // Trim and normalize names
-    const winnerNames = data.winners.map(name => name.trim());
+    const winnerNames = data.winners.map((name) => name.trim());
     const loserName = data.loser.trim();
 
     // Validate that winners don't include the loser
@@ -66,7 +65,7 @@ export class MatchService {
     }
 
     // Validate no duplicates in winners
-    const uniqueWinnerIds = new Set(winners.map(w => w.id));
+    const uniqueWinnerIds = new Set(winners.map((w) => w.id));
     if (uniqueWinnerIds.size !== winners.length) {
       throw new Error("Duplicate winners are not allowed");
     }
@@ -140,14 +139,11 @@ export class MatchService {
         throw new Error("Failed to retrieve created match details");
       }
 
-      // Check and award badges after match creation - award to all winners
-      for (const winner of winners) {
-        await badgeService.checkBadgesAfterMatch(winner.id, loser.id);
-      }
-
-      const matchType = winnerNames.length > 1 ? 'Draw' : 'Win';
+      const matchType = winnerNames.length > 1 ? "Draw" : "Win";
       console.log(
-        `✅ Match created (${matchType}): ${winnerNames.join(', ')} vs ${loserName}, Cost: ${data.cost}`
+        `✅ Match created (${matchType}): ${winnerNames.join(
+          ", "
+        )} vs ${loserName}, Cost: ${data.cost}`
       );
       return matchWithNames;
     } catch (error) {

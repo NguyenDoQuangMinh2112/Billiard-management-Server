@@ -16,7 +16,7 @@ export interface Match {
   date: Date;
   created_at: Date;
   participants?: string[];
-  match_result?: 'win' | 'draw' | 'tie';
+  match_result?: "win" | "draw" | "tie";
 }
 
 export interface MatchWithNames {
@@ -27,7 +27,7 @@ export interface MatchWithNames {
   cost: number;
   date: Date;
   participants?: string[];
-  match_result?: 'win' | 'draw' | 'tie';
+  match_result?: "win" | "draw" | "tie";
 }
 
 export interface PlayerStats {
@@ -61,27 +61,4 @@ export interface PayerRotation {
   id: number;
   current_payer_id: number;
   updated_at: Date;
-}
-
-export interface Badge {
-  id: string;
-  name: string;
-  criterion: string;
-  short_description: string;
-  icon: string;
-  created_at: Date;
-}
-
-export interface PlayerBadge {
-  id: number;
-  player_id: number;
-  badge_id: string;
-  match_id: string | null;
-  awarded_at: Date;
-}
-
-export interface AwardBadgeDTO {
-  player_id: number;
-  badge_id: string;
-  match_id?: string;
 }

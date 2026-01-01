@@ -3,7 +3,6 @@ import { cors } from "@elysiajs/cors";
 import { playersRouter } from "./src/routes/players";
 import { matchesRouter } from "./src/routes/matches";
 import { statsRouter } from "./src/routes/stats";
-import { badgesRouter } from "./src/routes/badges";
 import { Migration, PlayerModel } from "./src/models";
 import { ErrorHandler, AppError } from "./src/errors";
 import { logger } from "./src/utils/logger";
@@ -63,7 +62,6 @@ const app = new Elysia()
       .use(playersRouter)
       .use(matchesRouter)
       .use(statsRouter)
-      .use(badgesRouter)
       // Temporary migration endpoint
       .post("/migrate", async () => {
         try {
