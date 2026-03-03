@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { playersRouter } from "./src/routes/players";
 import { matchesRouter } from "./src/routes/matches";
 import { statsRouter } from "./src/routes/stats";
+import { duelRouter } from "./src/routes/duel";
 import { Migration, PlayerModel } from "./src/models";
 import { ErrorHandler, AppError } from "./src/errors";
 import { logger } from "./src/utils/logger";
@@ -16,7 +17,7 @@ const app = new Elysia()
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
       credentials: false,
-    })
+    }),
   )
 
   // Health check endpoint
@@ -62,6 +63,7 @@ const app = new Elysia()
       .use(playersRouter)
       .use(matchesRouter)
       .use(statsRouter)
+      .use(duelRouter)
       // Temporary migration endpoint
       .post("/migrate", async () => {
         try {
@@ -74,7 +76,7 @@ const app = new Elysia()
             error: error instanceof Error ? error.message : "Migration failed",
           };
         }
-      })
+      }),
   )
 
   // Enhanced error handling
@@ -103,14 +105,14 @@ const app = new Elysia()
     if (code === "VALIDATION") {
       set.status = 400;
       return ErrorHandler.handle(
-        error instanceof Error ? error : new Error(errorMessage)
+        error instanceof Error ? error : new Error(errorMessage),
       );
     }
 
     // Generic error handling
     set.status = 500;
     return ErrorHandler.handle(
-      error instanceof Error ? error : new Error(errorMessage)
+      error instanceof Error ? error : new Error(errorMessage),
     );
   })
 
@@ -128,7 +130,7 @@ const app = new Elysia()
 
 // Server startup success message
 logger.info(
-  `Server is running at http://${config.server.host}:${config.server.port}`
+  `Server is running at http://${config.server.host}:${config.server.port}`,
 );
 
 // Handle process termination

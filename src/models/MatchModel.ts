@@ -22,28 +22,44 @@ export class MatchModel extends BaseModel {
 
     // Migration for existing tables: Add participants column
     try {
-        await sql`
+      await sql`
             ALTER TABLE matches 
             ADD COLUMN IF NOT EXISTS participants TEXT[]
         `;
     } catch (e) {
-        // Ignore if column exists or other minor error
-        // console.log("Migration note:", e);
+      // Ignore if column exists or other minor error
+      // console.log("Migration note:", e);
     }
 
-    // Create indexes for better performance
-    await sql`
-            CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches(winner_id)
-        `;
-    await sql`
-            CREATE INDEX IF NOT EXISTS idx_matches_loser ON matches(loser_id)
-        `;
-    await sql`
-            CREATE INDEX IF NOT EXISTS idx_matches_payer ON matches(payer_id)
-        `;
-    await sql`
-            CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)
-        `;
+    // Create indexes — each in its own try/catch so a missing column
+    // (e.g. winner_id was replaced by winners[] in a later migration)
+    // doesn't abort the whole migration.
+    const indexes: Array<{ name: string; ddl: string }> = [
+      {
+        name: "idx_matches_winner",
+        ddl: "CREATE INDEX IF NOT EXISTS idx_matches_winner ON matches(winner_id)",
+      },
+      {
+        name: "idx_matches_loser",
+        ddl: "CREATE INDEX IF NOT EXISTS idx_matches_loser ON matches(loser_id)",
+      },
+      {
+        name: "idx_matches_payer",
+        ddl: "CREATE INDEX IF NOT EXISTS idx_matches_payer ON matches(payer_id)",
+      },
+      {
+        name: "idx_matches_date",
+        ddl: "CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)",
+      },
+    ];
+
+    for (const idx of indexes) {
+      try {
+        await sql.unsafe(idx.ddl);
+      } catch (_e) {
+        // Index column may not exist on this schema version — skip silently
+      }
+    }
 
     // console.log("✅ Matches table created successfully");
   }
@@ -98,12 +114,13 @@ export class MatchModel extends BaseModel {
     loserName: string,
     payerId: number,
     cost: number,
-    participants: string[] = []
+    participants: string[] = [],
   ): Promise<Match> {
     // Get winner IDs - support multiple winners
     const winnerIds: number[] = [];
     for (const winnerName of winnerNames) {
-      const [winner] = await sql`SELECT id FROM players WHERE name = ${winnerName}`;
+      const [winner] =
+        await sql`SELECT id FROM players WHERE name = ${winnerName}`;
       if (!winner) {
         throw new Error(`Winner "${winnerName}" not found`);
       }
@@ -122,7 +139,7 @@ export class MatchModel extends BaseModel {
     }
 
     // Determine match result
-    const matchResult = winnerIds.length > 1 ? 'draw' : 'win';
+    const matchResult = winnerIds.length > 1 ? "draw" : "win";
 
     const [match] = await sql<Match[]>`
             INSERT INTO matches (winners, loser_id, payer_id, cost, participants, match_result)
@@ -168,7 +185,7 @@ export class MatchModel extends BaseModel {
   }
 
   static async getExpensesByTimeframe(
-    timeframe: "week" | "month" | "year" | "all" = "month"
+    timeframe: "week" | "month" | "year" | "all" = "month",
   ): Promise<{ total: number; byPlayer: Record<string, number> }> {
     let dateFilter = sql`TRUE`;
 

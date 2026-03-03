@@ -62,3 +62,87 @@ export interface PayerRotation {
   current_payer_id: number;
   updated_at: Date;
 }
+
+// ─── 1v1 Duel Types ───────────────────────────────────────────────────────────
+
+export interface DuelPlayer {
+  id: number;
+  name: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface DuelPlayerStats {
+  id: number;
+  name: string;
+  total_wins: number;
+  total_losses: number;
+  total_spent: number;
+  rounds_played: number;
+  win_rate: number;
+  created_at: Date;
+}
+
+export interface DuelSession {
+  id: string;
+  player1_id: number;
+  player2_id: number;
+  total_cost: number;
+  payer_type: "player1" | "player2" | "split";
+  payer_id: number | null;
+  status: "active" | "completed";
+  created_at: Date;
+  ended_at: Date | null;
+}
+
+export interface DuelSessionSummary {
+  id: string;
+  status: "active" | "completed";
+  total_cost: number;
+  payer_type: "player1" | "player2" | "split";
+  created_at: Date;
+  ended_at: Date | null;
+  player1_id: number;
+  player1_name: string;
+  player2_id: number;
+  player2_name: string;
+  player1_session_wins: number;
+  player2_session_wins: number;
+  total_rounds: number;
+}
+
+export interface DuelRound {
+  id: string;
+  session_id: string;
+  winner_id: number | null; // null = draw
+  player1_wins: number;
+  player1_losses: number;
+  player2_wins: number;
+  player2_losses: number;
+  cost: number;
+  payer_type: "player1" | "player2" | "split";
+  payer_id: number | null;
+  result: "win" | "draw";
+  played_at: Date;
+}
+
+export interface CreateDuelSessionDTO {
+  player1Name: string;
+  player2Name: string;
+}
+
+export interface CreateDuelRoundDTO {
+  sessionId: string;
+  player1Wins: number;
+  player1Losses: number;
+  player2Wins: number;
+  player2Losses: number;
+  cost: number;
+  payerType: "player1" | "player2" | "split";
+}
+
+export interface CompleteDuelSessionDTO {
+  sessionId: string;
+  totalCost: number;
+  payerType: "player1" | "player2" | "split";
+}
