@@ -69,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_duel_sessions_status ON duel_sessions(status);
 
 CREATE INDEX IF NOT EXISTS idx_duel_rounds_session ON duel_rounds(session_id);
 CREATE INDEX IF NOT EXISTS idx_duel_rounds_winner ON duel_rounds(winner_id);
+CREATE INDEX IF NOT EXISTS idx_duel_rounds_payer_type ON duel_rounds(payer_type);
 CREATE INDEX IF NOT EXISTS idx_duel_rounds_played_at ON duel_rounds(played_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_duel_players_name ON duel_players(LOWER(name));
@@ -143,22 +144,43 @@ LEFT JOIN (
     GROUP BY winner_id
 ) wins ON dp.id = wins.player_id
 LEFT JOIN (
-    SELECT s.player1_id AS player_id, COUNT(*) AS total
-    FROM duel_rounds r
-    JOIN duel_sessions s ON r.session_id = s.id
-    WHERE r.winner_id IS NOT NULL AND r.winner_id != s.player1_id
-    GROUP BY s.player1_id
-    UNION ALL
-    SELECT s.player2_id AS player_id, COUNT(*) AS total
-    FROM duel_rounds r
-    JOIN duel_sessions s ON r.session_id = s.id
-    WHERE r.winner_id IS NOT NULL AND r.winner_id != s.player2_id
-    GROUP BY s.player2_id
+    SELECT lost.player_id, COUNT(*) AS total
+    FROM (
+        SELECT s.player1_id AS player_id
+        FROM duel_rounds r
+        JOIN duel_sessions s ON r.session_id = s.id
+        WHERE r.winner_id IS NOT NULL AND r.winner_id != s.player1_id
+
+        UNION ALL
+
+        SELECT s.player2_id AS player_id
+        FROM duel_rounds r
+        JOIN duel_sessions s ON r.session_id = s.id
+        WHERE r.winner_id IS NOT NULL AND r.winner_id != s.player2_id
+    ) lost
+    GROUP BY lost.player_id
 ) losses ON dp.id = losses.player_id
 LEFT JOIN (
-    SELECT payer_id, SUM(cost) AS total
-    FROM duel_rounds
-    WHERE payer_id IS NOT NULL AND payer_type != 'split'
-    GROUP BY payer_id
+    SELECT spent_by_player.player_id, SUM(spent_by_player.amount)::DECIMAL(10,2) AS total
+    FROM (
+        SELECT payer_id AS player_id, cost::NUMERIC AS amount
+        FROM duel_rounds
+        WHERE payer_id IS NOT NULL AND payer_type IN ('player1', 'player2')
+
+        UNION ALL
+
+        SELECT s.player1_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+        FROM duel_rounds r
+        JOIN duel_sessions s ON r.session_id = s.id
+        WHERE r.payer_type = 'split'
+
+        UNION ALL
+
+        SELECT s.player2_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+        FROM duel_rounds r
+        JOIN duel_sessions s ON r.session_id = s.id
+        WHERE r.payer_type = 'split'
+    ) spent_by_player
+    GROUP BY spent_by_player.player_id
 ) spent ON dp.id = spent.player_id
 ORDER BY total_wins DESC, win_rate DESC;

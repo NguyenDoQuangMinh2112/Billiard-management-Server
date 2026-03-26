@@ -73,6 +73,7 @@ export class DuelModel {
     await sql`CREATE INDEX IF NOT EXISTS idx_duel_sessions_status ON duel_sessions(status)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_duel_rounds_session ON duel_rounds(session_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_duel_rounds_winner ON duel_rounds(winner_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_duel_rounds_payer_type ON duel_rounds(payer_type)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_duel_rounds_played_at ON duel_rounds(played_at DESC)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_duel_players_name ON duel_players(LOWER(name))`;
   }
@@ -81,16 +82,37 @@ export class DuelModel {
 
   static async findOrCreatePlayer(name: string): Promise<DuelPlayer> {
     const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error("Player name cannot be empty");
+    }
+
+    // Insert only when no case-insensitive match exists to avoid duplicate players.
+    const [created] = await sql<DuelPlayer[]>`
+      INSERT INTO duel_players (name)
+      SELECT ${trimmed}
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM duel_players
+        WHERE LOWER(name) = LOWER(${trimmed})
+      )
+      RETURNING *
+    `;
+    if (created) return created;
+
     const [existing] = await sql<DuelPlayer[]>`
       SELECT * FROM duel_players WHERE LOWER(name) = LOWER(${trimmed}) LIMIT 1
     `;
     if (existing) return existing;
 
-    const [created] = await sql<DuelPlayer[]>`
-      INSERT INTO duel_players (name) VALUES (${trimmed}) RETURNING *
+    throw new Error(`Failed to create duel player: ${trimmed}`);
+  }
+
+  static async getPlayerDirectory(): Promise<DuelPlayer[]> {
+    return await sql<DuelPlayer[]>`
+      SELECT id, name, created_at, updated_at
+      FROM duel_players
+      ORDER BY LOWER(name) ASC, created_at ASC
     `;
-    if (!created) throw new Error(`Failed to create duel player: ${trimmed}`);
-    return created;
   }
 
   static async getAllPlayers(): Promise<DuelPlayerStats[]> {
@@ -129,9 +151,27 @@ export class DuelModel {
         ) lost GROUP BY player_id
       ) losses ON dp.id = losses.player_id
       LEFT JOIN (
-        SELECT payer_id AS player_id, SUM(cost) AS total FROM duel_rounds
-        WHERE payer_id IS NOT NULL AND payer_type != 'split'
-        GROUP BY payer_id
+        SELECT spent_by_player.player_id, SUM(spent_by_player.amount)::DECIMAL(10,2) AS total
+        FROM (
+          SELECT payer_id AS player_id, cost::NUMERIC AS amount
+          FROM duel_rounds
+          WHERE payer_id IS NOT NULL AND payer_type IN ('player1', 'player2')
+
+          UNION ALL
+
+          SELECT s.player1_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+          FROM duel_rounds r
+          JOIN duel_sessions s ON r.session_id = s.id
+          WHERE r.payer_type = 'split'
+
+          UNION ALL
+
+          SELECT s.player2_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+          FROM duel_rounds r
+          JOIN duel_sessions s ON r.session_id = s.id
+          WHERE r.payer_type = 'split'
+        ) spent_by_player
+        GROUP BY spent_by_player.player_id
       ) spent ON dp.id = spent.player_id
       ORDER BY total_wins DESC, win_rate DESC
     `;
@@ -299,9 +339,27 @@ export class DuelModel {
         ) lost GROUP BY player_id
       ) losses ON dp.id = losses.player_id
       LEFT JOIN (
-        SELECT payer_id AS player_id, SUM(cost) AS total FROM duel_rounds
-        WHERE payer_id IS NOT NULL AND payer_type != 'split'
-        GROUP BY payer_id
+        SELECT spent_by_player.player_id, SUM(spent_by_player.amount)::DECIMAL(10,2) AS total
+        FROM (
+          SELECT payer_id AS player_id, cost::NUMERIC AS amount
+          FROM duel_rounds
+          WHERE payer_id IS NOT NULL AND payer_type IN ('player1', 'player2')
+
+          UNION ALL
+
+          SELECT s.player1_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+          FROM duel_rounds r
+          JOIN duel_sessions s ON r.session_id = s.id
+          WHERE r.payer_type = 'split'
+
+          UNION ALL
+
+          SELECT s.player2_id AS player_id, (r.cost::NUMERIC / 2.0) AS amount
+          FROM duel_rounds r
+          JOIN duel_sessions s ON r.session_id = s.id
+          WHERE r.payer_type = 'split'
+        ) spent_by_player
+        GROUP BY spent_by_player.player_id
       ) spent ON dp.id = spent.player_id
       LEFT JOIN (
         SELECT player_id, COUNT(*) AS total FROM (
@@ -333,9 +391,9 @@ export class DuelModel {
       JOIN duel_players p2 ON s.player2_id = p2.id
       LEFT JOIN duel_players pay ON s.payer_id = pay.id
       LEFT JOIN duel_rounds r ON r.session_id = s.id
-      WHERE s.status = 'completed'
       GROUP BY s.id, p1.id, p1.name, p2.id, p2.name, pay.name
-      ORDER BY s.ended_at DESC
+      HAVING COALESCE(COUNT(r.id), 0) > 0 OR s.status = 'completed'
+      ORDER BY COALESCE(s.ended_at, s.created_at) DESC
       LIMIT ${limit}
     `;
   }

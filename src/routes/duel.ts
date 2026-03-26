@@ -197,6 +197,22 @@ export const duelRouter = new Elysia({ prefix: "/duel" })
 
   // ── Players ─────────────────────────────────────────────────────────────────
 
+  // GET /api/duel/players/directory — lightweight player list for selects
+  .get("/players/directory", async () => {
+    try {
+      const players = await duelService.getPlayerDirectory();
+      return { success: true, data: players };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch player directory",
+      };
+    }
+  })
+
   // GET /api/duel/players — get all 1v1 players with stats
   .get("/players", async () => {
     try {
@@ -234,7 +250,7 @@ export const duelRouter = new Elysia({ prefix: "/duel" })
     },
   )
 
-  // GET /api/duel/history?limit=50 — all completed sessions, most recent first
+  // GET /api/duel/history?limit=50 — sessions with rounds (completed + active)
   .get(
     "/history",
     async ({ query }) => {

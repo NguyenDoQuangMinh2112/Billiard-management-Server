@@ -102,6 +102,10 @@ export const duelService = {
     return DuelModel.getAllPlayers();
   },
 
+  async getPlayerDirectory() {
+    return DuelModel.getPlayerDirectory();
+  },
+
   async getLeaderboard(limit = 20) {
     return DuelModel.getLeaderboard(limit);
   },

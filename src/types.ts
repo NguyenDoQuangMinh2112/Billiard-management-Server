@@ -79,6 +79,7 @@ export interface DuelPlayerStats {
   total_losses: number;
   total_spent: number;
   rounds_played: number;
+  sessions_played?: number;
   win_rate: number;
   created_at: Date;
 }
